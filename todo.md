@@ -1,0 +1,51 @@
+- [X] Analisar documentação da API John Deere
+  - [X] Acessar portal do desenvolvedor: https://developer.deere.com
+  - [X] Navegar para "Dev Docs"
+  - [X] Filtrar por "Precision Tech"
+  - [X] Identificar APIs do Operations Center:
+    - [X] Operations Center - Organizations
+    - [X] Operations Center - Partnerships
+    - [X] Operations Center - Users
+  - [X] Analisar API "Operations Center - Organizations":
+    - [X] Endpoints (ex: GET /organizations)
+    - [X] Detalhes da requisição (URI, Headers - Accept: application/vnd.deere.axiom.v3+json)
+    - [X] Exemplo de resposta JSON
+  - [X] Analisar Segurança/Autenticação:
+    - [X] OAuth 2.0 (Authorization Code Grant Type)
+    - [X] Necessidade de registrar uma aplicação em developer.deere.com
+    - [X] Obter Application ID e Secret
+    - [X] Configurar Redirect URIs (Callback URLs), ex: http://localhost:9090/callback
+    - [X] Chamar a URL "well-known" para obter endpoints de autorização e token (ex: https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/.well-known/oauth-authorization-server)
+    - [X] Fluxo:
+        1. Redirecionar usuário para o servidor de autorização John Deere.
+        2. Usuário autoriza.
+        3. Servidor de autorização redireciona de volta para o Redirect URI com um `authorization_code`.
+        4. Aplicação troca o `authorization_code` por um `access_token` (e opcionalmente `refresh_token`) fazendo uma requisição POST para o token endpoint.
+        5. Usar o `access_token` para chamar as APIs da John Deere.
+    - [X] Escopos (scopes) a serem definidos durante o fluxo OAuth2 (precisa verificar quais são necessários para os endpoints do Operations Center).
+- [X] Criar estrutura Flask com template padrão
+  - [X] Usar o comando `create_flask_app john_deere_api`
+  - [X] Configurar o ambiente virtual
+- [ ] Implementar endpoints para acessar dados do Operations Center
+  - [ ] Implementar fluxo OAuth 2.0 no Flask:
+    - [X] Criar arquivo para rotas de autenticação (ex: `/home/ubuntu/john_deere_api/src/routes/auth.py`) com estrutura inicial
+    - [X] Definir Client ID, Client Secret e Redirect URI (inicialmente como placeholders ou variáveis de ambiente)
+    - [X] Obter URLs de autorização e token do endpoint well-known da John Deere.
+    - [X] Criar rota `/login` para redirecionar o usuário para a página de autorização da John Deere.
+    - [X] Criar rota `/callback` para:
+        - [X] Receber o `authorization_code`.
+        - [X] Trocar o `authorization_code` por um `access_token` e `refresh_token` (requisição POST para o token endpoint da John Deere).
+        - [X] Armazenar os tokens de forma segura (ex: sessão Flask).
+        - [X] Redirecionar o usuário para uma página de sucesso ou para a rota principal da API.
+    - [X] Implementar rota `/logout`.
+    - [X] Implementar rota `/refresh_token`.
+    - [X] Criar função helper `get_access_token`.
+  - [X] Criar rota na API Flask (ex: `/home/ubuntu/john_deere_api/src/routes/operations_center.py` com rota `/organizations`) que:
+    - [X] Verifique se há um `access_token` válido (e atualize-o usando o `refresh_token` se necessário e disponível).
+    - [X] Faça a requisição para a API da John Deere (GET https://sandboxapi.deere.com/platform/organizations) usando o `access_token` no header de Autorização (Bearer token).
+    - [X] Retorne os dados da John Deere ou uma mensagem de erro apropriada.
+  - [X] Registrar os blueprints de autenticação e do operations_center no `main.py`.
+- [X] Testar endpoints localmente
+- [ ] Validar funcionamento e autenticação (requer configuração e teste pelo usuário)
+- [X] Gerar requirements.txt e documentação de uso
+- [ ] Reportar e enviar código para usuário

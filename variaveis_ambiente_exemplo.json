@@ -1,0 +1,11 @@
+{
+  "FLASK_SECRET_KEY": "uma-chave-forte-aqui",
+  "PORT": "5000",
+  "DEERE_CLIENT_ID": "0oao95eowc9w82gog5d7",
+  "DEERE_CLIENT_SECRET": "Ms9cjgK531gnhfiezMc8J0kUKmMEftwZWtO_-g82tNZdr1NS87s3I0tQS9Llqb00",
+  "DEERE_REDIRECT_URI": "http://localhost:5000/auth/callback",
+  "DEERE_OAUTH_ISSUER": "https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7",
+  "DEERE_SCOPES": "ag1 org1 eq1 eq2 offline_access",
+  "DEERE_API_BASE_URL": "https://sandboxapi.deere.com/platform",
+  "HTTP_TIMEOUT_SECONDS": "20"
+}
