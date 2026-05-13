@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from operations_center import _authorized_get
+from deere_client import _authorized_get
 
 bi_bp = Blueprint("bi_bp", __name__)
 

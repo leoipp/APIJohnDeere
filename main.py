@@ -27,6 +27,13 @@ def create_app() -> Flask:
     from auth import auth_bp
     from operations_center import operations_center_bp
     from bi import bi_bp
+    from equipment import equipment_bp
+    from machines_telemetry import machines_telemetry_bp
+    from assets import assets_bp
+    from maps import maps_bp
+    from files_api import files_bp
+    from agronomy import agronomy_bp
+    from farm_ops import farm_ops_bp
 
     app = Flask(__name__)
 
@@ -37,6 +44,17 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(operations_center_bp, url_prefix="/api/oc")
     app.register_blueprint(bi_bp, url_prefix="/api/bi")
+
+    # Operations Center — domínios separados, mesmo prefixo /api/oc
+    app.register_blueprint(equipment_bp, url_prefix="/api/oc")
+    app.register_blueprint(machines_telemetry_bp, url_prefix="/api/oc")
+    app.register_blueprint(assets_bp, url_prefix="/api/oc")
+    app.register_blueprint(maps_bp, url_prefix="/api/oc")
+    app.register_blueprint(files_bp, url_prefix="/api/oc")
+    app.register_blueprint(farm_ops_bp, url_prefix="/api/oc")
+
+    # Agronomia — prefixo dedicado /api/agro
+    app.register_blueprint(agronomy_bp, url_prefix="/api/agro")
 
     @app.get("/")
     def root():
@@ -53,6 +71,12 @@ def create_app() -> Flask:
                     <li><a href="{login_url}">Fazer login (OAuth)</a></li>
                     <li><a href="{status_url}">Ver status da autenticacao</a></li>
                     <li><a href="{organizations_url}">Listar organizacoes</a></li>
+                </ul>
+                <h2>Prefixos disponíveis</h2>
+                <ul>
+                    <li><code>/api/oc</code> — Organizations, Equipment, Machines, Assets, Maps, Files, Farms, Operators</li>
+                    <li><code>/api/agro</code> — Chemicals, Fertilizers, Varieties, TankMixes, DryBlends, ProductCompanies, ActiveIngredients</li>
+                    <li><code>/api/bi</code> — Dados formatados para BI</li>
                 </ul>
             </body>
         </html>

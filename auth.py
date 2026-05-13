@@ -228,3 +228,45 @@ def auth_status():
             "has_refresh_token": bool(session.get("refresh_token")),
         }
     )
+
+
+@auth_bp.get("/token-info")
+def token_info():
+    """Decodifica o JWT sem verificar assinatura para inspecionar scopes e claims."""
+    import base64
+    import json as _json
+
+    access_token = session.get("access_token")
+    if not access_token:
+        return jsonify({"error": "not_authenticated"}), 401
+
+    try:
+        parts = access_token.split(".")
+        if len(parts) != 3:
+            return jsonify({"error": "token_format_invalid", "token_type": session.get("token_type")}), 400
+
+        # JWT payload é base64url — adiciona padding se necessário
+        payload_b64 = parts[1]
+        padding = 4 - len(payload_b64) % 4
+        if padding != 4:
+            payload_b64 += "=" * padding
+
+        payload = _json.loads(base64.urlsafe_b64decode(payload_b64))
+
+        scopes_raw = payload.get("scp") or payload.get("scope") or []
+        if isinstance(scopes_raw, str):
+            scopes_raw = scopes_raw.split()
+
+        return jsonify({
+            "sub": payload.get("sub"),
+            "client_id": payload.get("cid") or payload.get("client_id"),
+            "scopes_granted": scopes_raw,
+            "scopes_requested_in_config": _scopes().split(),
+            "missing_scopes": [s for s in _scopes().split() if s not in scopes_raw],
+            "expires_at": payload.get("exp"),
+            "issued_at": payload.get("iat"),
+            "issuer": payload.get("iss"),
+        }), 200
+
+    except Exception as exc:
+        return jsonify({"error": "decode_failed", "detail": str(exc)}), 500

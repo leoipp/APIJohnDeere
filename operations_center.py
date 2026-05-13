@@ -1,11 +1,15 @@
-import os
 from typing import Any
 
-import requests
 from flask import Blueprint, jsonify, request
-from requests import Response
 
-from auth import get_valid_access_token
+from deere_client import (
+    _api_base_url,
+    _authorized_get,
+    _build_deere_url,
+    _extract_ids,
+    _fetch_all_pages,
+    _get_values,
+)
 
 operations_center_bp = Blueprint("operations_center_bp", __name__)
 
@@ -13,17 +17,6 @@ operations_center_bp = Blueprint("operations_center_bp", __name__)
 # ============================================================
 # CONFIG
 # ============================================================
-
-def _api_base_url() -> str:
-    return os.environ.get(
-        "DEERE_API_BASE_URL",
-        "https://api.deere.com/platform",
-    ).strip().rstrip("/")
-
-
-def _http_timeout_seconds() -> int:
-    return int(os.environ.get("HTTP_TIMEOUT_SECONDS", "20"))
-
 
 def _organizations_endpoint() -> str:
     return f"{_api_base_url()}/organizations"
@@ -46,106 +39,11 @@ def _machine_engine_hours_endpoint(machine_id: str) -> str:
 
 
 # ============================================================
-# HTTP JOHN DEERE
-# ============================================================
-
-def _build_deere_url(path: str) -> str | None:
-    if not path:
-        return None
-
-    normalized = str(path).strip()
-
-    if not normalized:
-        return None
-
-    if normalized.startswith("https://api.deere.com/"):
-        return normalized
-
-    if normalized.startswith("https://sandboxapi.deere.com/"):
-        return normalized
-
-    if "://" in normalized:
-        return None
-
-    if not normalized.startswith("/"):
-        normalized = f"/{normalized}"
-
-    return f"{_api_base_url()}{normalized}"
-
-
-def _authorized_get(
-    url: str,
-    accept_header: str = "application/vnd.deere.axiom.v3+json",
-    params: dict[str, str] | None = None,
-) -> tuple[Response | None, tuple[dict, int] | None]:
-
-    access_token = get_valid_access_token()
-
-    if not access_token:
-        return None, (
-            {
-                "error": "unauthorized",
-                "message": "Realize o login em /auth/login antes de acessar este recurso.",
-            },
-            401,
-        )
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": accept_header,
-    }
-
-    try:
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            timeout=_http_timeout_seconds(),
-        )
-
-        if not response.ok:
-            return None, (
-                {
-                    "error": "deere_api_error",
-                    "message": "Falha na chamada da API John Deere.",
-                    "status_code": response.status_code,
-                    "url": response.url,
-                    "details": response.text,
-                },
-                response.status_code,
-            )
-
-        return response, None
-
-    except requests.RequestException as exc:
-        return None, (
-            {
-                "error": "network_error",
-                "message": str(exc),
-                "url": url,
-            },
-            502,
-        )
-
-
-# ============================================================
 # HELPERS
 # ============================================================
 
-def _get_values(payload: Any) -> list[dict[str, Any]]:
-    if isinstance(payload, dict):
-        values = payload.get("values", [])
-        if isinstance(values, list):
-            return [item for item in values if isinstance(item, dict)]
-    return []
-
 
 def _latest_engine_hours(payload: Any) -> dict[str, Any]:
-    """
-    Extrai somente a leitura mais recente de horímetro.
-    A Deere retorna uma lista em payload["values"], ordenada da mais recente
-    para a mais antiga.
-    """
     result = {
         "engine_hours": None,
         "engine_hours_unit": None,
@@ -214,47 +112,6 @@ def _equipment_to_summary_row(item: dict[str, Any]) -> dict[str, Any]:
         "in_possession": organization_role.get("inPossession"),
         "role_effective_ts": organization_role.get("effectiveTS"),
     }
-
-
-def _extract_ids(payload: Any, source_path: str) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-
-    def walk(node: Any) -> None:
-        if isinstance(node, dict):
-            if "id" in node:
-                result = {
-                    "id": str(node.get("id")),
-                    "type": node.get("@type"),
-                    "name": node.get("name"),
-                    "source_path": source_path,
-                }
-
-                links = node.get("links")
-
-                if isinstance(links, list):
-                    self_link = next(
-                        (
-                            link
-                            for link in links
-                            if isinstance(link, dict) and link.get("rel") == "self"
-                        ),
-                        None,
-                    )
-
-                    if isinstance(self_link, dict):
-                        result["self_uri"] = self_link.get("uri")
-
-                results.append(result)
-
-            for value in node.values():
-                walk(value)
-
-        elif isinstance(node, list):
-            for item in node:
-                walk(item)
-
-    walk(payload)
-    return results
 
 
 # ============================================================
