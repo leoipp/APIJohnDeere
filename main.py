@@ -26,6 +26,7 @@ def create_app() -> Flask:
     load_env_from_json()
     from auth import auth_bp
     from operations_center import operations_center_bp
+    from bi import bi_bp
 
     app = Flask(__name__)
 
@@ -35,6 +36,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(operations_center_bp, url_prefix="/api/oc")
+    app.register_blueprint(bi_bp, url_prefix="/api/bi")
 
     @app.get("/")
     def root():

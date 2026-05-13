@@ -6,6 +6,6 @@
   "DEERE_REDIRECT_URI": "http://localhost:5000/auth/callback",
   "DEERE_OAUTH_ISSUER": "https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7",
   "DEERE_SCOPES": "ag1 org1 eq1 eq2 offline_access",
-  "DEERE_API_BASE_URL": "https://sandboxapi.deere.com/platform",
+  "DEERE_API_BASE_URL": "https://api.deere.com/platform",
   "HTTP_TIMEOUT_SECONDS": "20"
 }
