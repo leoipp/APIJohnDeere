@@ -49,6 +49,7 @@ def _authorized_get(
     url: str,
     accept_header: str = "application/vnd.deere.axiom.v3+json",
     params: dict[str, str] | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> tuple[Response | None, tuple[dict, int] | None]:
     access_token = get_valid_access_token()
     if not access_token:
@@ -64,6 +65,8 @@ def _authorized_get(
         "Authorization": f"Bearer {access_token}",
         "Accept": accept_header,
     }
+    if extra_headers:
+        headers.update(extra_headers)
 
     try:
         response = requests.get(url, headers=headers, params=params, timeout=_http_timeout_seconds())
@@ -95,6 +98,7 @@ def _fetch_all_pages(
     url: str,
     params: dict | None = None,
     accept_header: str = "application/vnd.deere.axiom.v3+json",
+    extra_headers: dict[str, str] | None = None,
 ) -> tuple[list[dict], tuple[dict, int] | None]:
     """Follows nextPage links and consolidates all values into a single list."""
     all_values: list[dict] = []
@@ -102,7 +106,7 @@ def _fetch_all_pages(
     current_params = params
 
     while current_url:
-        response, error = _authorized_get(current_url, accept_header=accept_header, params=current_params)
+        response, error = _authorized_get(current_url, accept_header=accept_header, params=current_params, extra_headers=extra_headers)
         if error:
             return [], error
 

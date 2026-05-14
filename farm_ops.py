@@ -1,8 +1,44 @@
 from flask import Blueprint, jsonify, request
 
-from deere_client import _authorized_get, _fetch_all_pages, _platform_url
+from deere_client import _authorized_get, _date_params, _fetch_all_pages, _platform_url
 
 farm_ops_bp = Blueprint("farm_ops_bp", __name__)
+
+
+def _normalize_field_operation(item: dict) -> dict:
+    machine = item.get("machine") if isinstance(item.get("machine"), dict) else {}
+    field = item.get("field") if isinstance(item.get("field"), dict) else {}
+    farm = item.get("farm") if isinstance(item.get("farm"), dict) else {}
+    client = item.get("client") if isinstance(item.get("client"), dict) else {}
+    quantities = item.get("quantities") if isinstance(item.get("quantities"), list) else []
+
+    normalized_quantities = []
+    for q in quantities:
+        if not isinstance(q, dict):
+            continue
+        measurement = q.get("measurement") if isinstance(q.get("measurement"), dict) else {}
+        normalized_quantities.append({
+            "type": q.get("@type"),
+            "value": measurement.get("asDouble"),
+            "unit": measurement.get("unit"),
+        })
+
+    return {
+        "id": item.get("id"),
+        "type": item.get("@type"),
+        "start_date": item.get("startDate"),
+        "end_date": item.get("endDate"),
+        "last_modified": item.get("lastModifiedDate"),
+        "machine_id": machine.get("id"),
+        "machine_name": machine.get("name"),
+        "field_id": field.get("id"),
+        "field_name": field.get("name"),
+        "farm_id": farm.get("id"),
+        "farm_name": farm.get("name"),
+        "client_id": client.get("id"),
+        "client_name": client.get("name"),
+        "quantities": normalized_quantities,
+    }
 
 
 def _normalize_operator(item: dict) -> dict:
@@ -158,3 +194,81 @@ def get_farm_clients(org_id: str, farm_id: str):
         "total": len(values),
         "values": [_normalize_client(v) for v in values],
     }), 200
+
+
+# ============================================================
+# FIELD OPERATIONS
+# ============================================================
+
+@farm_ops_bp.get("/organizations/<string:org_id>/fieldOperations")
+def get_field_operations(org_id: str):
+    if not org_id.strip():
+        return jsonify({"error": "invalid_org_id", "message": "org_id nao pode ser vazio."}), 400
+
+    raw = request.args.get("raw", "false").lower() == "true"
+    params: dict = {}
+    date_p = _date_params(request.args.get("startDate"), request.args.get("endDate"))
+    if date_p:
+        params.update(date_p)
+    op_type = request.args.get("type")
+    if op_type:
+        params["fieldOperationType"] = op_type
+
+    url = _platform_url(f"/organizations/{org_id}/fieldOperations")
+
+    if raw:
+        response, error = _authorized_get(url, params=params or None)
+        if error:
+            return jsonify(error[0]), error[1]
+        return jsonify(response.json()), 200
+
+    values, error = _fetch_all_pages(url, params=params or None)
+    if error:
+        return jsonify(error[0]), error[1]
+
+    return jsonify({
+        "organization_id": org_id,
+        "total": len(values),
+        "values": [_normalize_field_operation(v) for v in values],
+    }), 200
+
+
+@farm_ops_bp.get("/organizations/<string:org_id>/fieldOperations/harvest")
+def get_harvest_operations(org_id: str):
+    if not org_id.strip():
+        return jsonify({"error": "invalid_org_id", "message": "org_id nao pode ser vazio."}), 400
+
+    params: dict = {"fieldOperationType": "HarvestActivity"}
+    date_p = _date_params(request.args.get("startDate"), request.args.get("endDate"))
+    if date_p:
+        params.update(date_p)
+
+    url = _platform_url(f"/organizations/{org_id}/fieldOperations")
+    values, error = _fetch_all_pages(url, params=params)
+    if error:
+        return jsonify(error[0]), error[1]
+
+    return jsonify({
+        "organization_id": org_id,
+        "total": len(values),
+        "values": [_normalize_field_operation(v) for v in values],
+    }), 200
+
+
+@farm_ops_bp.get("/organizations/<string:org_id>/fieldOperations/<string:operation_id>")
+def get_field_operation_by_id(org_id: str, operation_id: str):
+    if not org_id.strip() or not operation_id.strip():
+        return jsonify({"error": "invalid_params", "message": "org_id e operation_id nao podem ser vazios."}), 400
+
+    raw = request.args.get("raw", "false").lower() == "true"
+    url = _platform_url(f"/organizations/{org_id}/fieldOperations/{operation_id}")
+
+    response, error = _authorized_get(url)
+    if error:
+        return jsonify(error[0]), error[1]
+
+    data = response.json()
+    if raw:
+        return jsonify(data), 200
+
+    return jsonify(_normalize_field_operation(data)), 200
