@@ -16,7 +16,7 @@ API Flask que autentica via OAuth2 com o John Deere Operations Center e expõe d
 - [Rotas — Máquinas (telemetria)](#rotas--máquinas-telemetria)
 - [Rotas — Assets](#rotas--assets)
 - [Rotas — Mapas e Camadas](#rotas--mapas-e-camadas)
-- [Rotas — Arquivos](#rotas--arquivos)
+- [Rotas — Arquivos e TIMBERLINK](#rotas--arquivos-e-timberlink)
 - [Rotas — Agronomia](#rotas--agronomia)
 - [Rotas — Fazendas e Operadores](#rotas--fazendas-e-operadores)
 - [Rotas — BI e Utilitários](#rotas--bi-e-utilitários)
@@ -37,9 +37,9 @@ Crie o arquivo `variaveis_ambiente.json` na raiz do projeto (use `variaveis_ambi
   "DEERE_CLIENT_SECRET": "seu-client-secret",
   "DEERE_REDIRECT_URI": "http://localhost:5000/auth/callback",
   "DEERE_OAUTH_ISSUER": "https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7",
-  "DEERE_SCOPES": "ag1 org1 eq1 eq2 offline_access",
+  "DEERE_SCOPES": "ag1 ag2 ag3 org1 eq1 eq2 files offline_access",
   "DEERE_API_BASE_URL": "https://api.deere.com/platform",
-  "HTTP_TIMEOUT_SECONDS": "20"
+  "HTTP_TIMEOUT_SECONDS": "120"
 }
 ```
 
@@ -52,7 +52,7 @@ Crie o arquivo `variaveis_ambiente.json` na raiz do projeto (use `variaveis_ambi
 | `DEERE_OAUTH_ISSUER` | Não | `https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7` |
 | `DEERE_SCOPES` | Não | `ag1 org1 offline_access` |
 | `DEERE_API_BASE_URL` | Não | `https://api.deere.com/platform` |
-| `HTTP_TIMEOUT_SECONDS` | Não | `20` |
+| `HTTP_TIMEOUT_SECONDS` | Não | `120` |
 | `PORT` | Não | `5000` |
 
 ---
@@ -107,15 +107,15 @@ Todos os endpoints protegidos aceitam os query params abaixo:
 }
 ```
 
-### Status dos endpoints testados em produção
+### Status dos endpoints
 
 | Status | Significado |
 |---|---|
-| ✅ confirmado | Testado contra API Deere real, retornou 200 |
-| ❌ 403 | Retorna 403 — restrição de conta ou endpoint OEM/parceiro |
+| ✅ confirmado | Testado contra API Deere real, retornou dados |
+| ❌ 403 | Restrição de conta ou permissão de aplicação no portal Deere |
 | ⚠️ não testado | Implementado mas não validado com conta real |
 
-> Endpoints marcados como ❌ continuam no código e repassam o erro original da Deere, pois podem funcionar com outros tipos de conta.
+> Endpoints marcados como ❌ continuam no código e repassam o erro original da Deere — podem funcionar com outros tipos de conta ou após aprovação no developer portal.
 
 ---
 
@@ -130,19 +130,14 @@ GET /auth/logout             Invalida a sessão local
 GET /auth/token-info         Decodifica o JWT e mostra scopes concedidos vs solicitados
 ```
 
-### Teste rápido
+### Links diretos
 
-```bash
-# Verificar status
-curl http://localhost:5000/auth/status
-
-# Resposta esperada (não autenticado)
-{"authenticated": false, "expires_at": null, "has_refresh_token": false}
-
-# Inspecionar scopes do token (útil para diagnóstico de 403)
-curl http://localhost:5000/auth/token-info
-# Resposta: {"sub": "...", "scopes_granted": ["ag1","org1","eq1","eq2","offline_access"], "missing_scopes": []}
-```
+| Ação | Link |
+|---|---|
+| Login | http://localhost:5000/auth/login |
+| Status da sessão | http://localhost:5000/auth/status |
+| Scopes do token | http://localhost:5000/auth/token-info |
+| Logout | http://localhost:5000/auth/logout |
 
 ---
 
@@ -156,21 +151,14 @@ GET /organizations/{id}             ✅ confirmado
 GET /organizations/{id}/settings    ✅ confirmado
 ```
 
-### Exemplos
+### Links diretos (org 413958)
 
-```bash
-# Listar todas as organizações
-curl http://localhost:5000/api/oc/organizations
-
-# Buscar organização específica
-curl http://localhost:5000/api/oc/organizations/413958
-
-# Configurações da organização
-curl http://localhost:5000/api/oc/organizations/413958/settings
-
-# Retorno bruto (sem normalização)
-curl "http://localhost:5000/api/oc/organizations?raw=true"
-```
+| Endpoint | Link |
+|---|---|
+| Listar organizações | http://localhost:5000/api/oc/organizations |
+| Organização 413958 | http://localhost:5000/api/oc/organizations/413958 |
+| Configurações da org | http://localhost:5000/api/oc/organizations/413958/settings |
+| Raw (bruto) | http://localhost:5000/api/oc/organizations?raw=true |
 
 ---
 
@@ -190,30 +178,17 @@ GET /equipmentMakes/{makeId}/equipmentTypes/{typeId}/equipmentModels/{modelId}  
 GET /equipment/{id}                                         ⚠️  não testado
 ```
 
-> **Nota sobre 403 em equipmentTypes / equipmentISGTypes:** esses endpoints são do catálogo global da Deere e exigem conta OEM ou de fabricante. Contas de operador (fazenda/empresa) recebem 403 mesmo com os scopes `eq1` e `eq2` presentes no token. Isso é uma restrição de tipo de conta, não de configuração.
+> **Nota sobre 403 em equipmentTypes / equipmentISGTypes:** esses endpoints são do catálogo global da Deere e exigem conta OEM ou de fabricante. Contas de operador recebem 403 mesmo com os scopes `eq1` e `eq2` presentes.
 
-### Exemplos
+### Links diretos (org 413958)
 
-```bash
-# Listar equipamentos da organização (confirmados ✅)
-curl "http://localhost:5000/api/oc/organizations/413958/equipment"
-curl "http://localhost:5000/api/oc/organizations/413958/equipment-summary?only_telematics=true"
-curl "http://localhost:5000/api/oc/organizations/413958/equipment-summary?include_archived=true"
-curl "http://localhost:5000/api/oc/organizations/413958/machines-summary"
-
-# Catálogo global — apenas contas OEM (retorna 403 para operadores)
-curl http://localhost:5000/api/oc/equipmentTypes
-curl http://localhost:5000/api/oc/equipmentISGTypes
-
-# Buscar modelo pelo número de série
-curl http://localhost:5000/api/oc/equipmentModels/1RW8500RPFE123456
-
-# Buscar modelo pela hierarquia make/type/model
-curl "http://localhost:5000/api/oc/equipmentMakes/2/equipmentTypes/1/equipmentModels/45"
-
-# Buscar equipamento por ID (ISG)
-curl http://localhost:5000/api/oc/equipment/abc123
-```
+| Endpoint | Link |
+|---|---|
+| Equipamentos | http://localhost:5000/api/oc/organizations/413958/equipment |
+| Equipment summary | http://localhost:5000/api/oc/organizations/413958/equipment-summary |
+| Só com telemática | http://localhost:5000/api/oc/organizations/413958/equipment-summary?only_telematics=true |
+| Machines | http://localhost:5000/api/oc/organizations/413958/machines |
+| Machines summary | http://localhost:5000/api/oc/organizations/413958/machines-summary |
 
 ---
 
@@ -224,46 +199,37 @@ Base: `http://localhost:5000/api/oc`
 ```
 GET /machines/{id}/engineHours              ✅ confirmado
 GET /machines/{id}/engineHours/latest       ✅ confirmado
+GET /organizations/{id}/engine-hours        ✅ confirmado (horímetro consolidado de toda frota)
 GET /machines/{id}/breadcrumbs              ✅ confirmado
 GET /machines/{id}/locationHistory          ✅ confirmado
 GET /machines/{id}/deviceStateReports       ✅ confirmado
 GET /machines/{id}/hoursOfOperation         ✅ confirmado
-GET /machines/{id}/machineMeasurements      ⚠️  reativado via ISG (testar)
-GET /organizations/{id}/engine-hours        ✅ confirmado (horímetro consolidado de toda frota)
+GET /machines/{id}/fuelAndUtilization       ✅ confirmado
+GET /machines/{id}/machineMeasurements      ✅ confirmado
+GET /machines/{id}/harvesterHead            ✅ confirmado — medições de cabeçote colheitadeira florestal
 ```
 
-> **Dica — `principalId` vs `id`:** máquinas transferidas entre organizações podem ter `id != principalId`. O endpoint `/engine-hours` por organização tenta automaticamente o `principalId` como fallback. Para chamadas diretas, se `engineHours` retornar 404, tente usar o `principalId` da máquina no lugar do `id`.
+> **Dica — `principalId` vs `id`:** máquinas transferidas entre organizações podem ter `id != principalId`. Para chamadas diretas, se `engineHours` retornar 404, tente usar o `principalId` da máquina no lugar do `id`.
 
-### Exemplos
+> **`harvesterHead`** retorna medições StanForD de cabeçote: Volume, Grapple Count, Times (working/idle/moving/maintenance), Fuel Consumption e Machine Utilization. Usar com `?startDate=` e `?endDate=`.
 
-```bash
-MACHINE_ID="1396548"
+### Links diretos (org 413958)
 
-# Histórico completo de horímetro
-curl http://localhost:5000/api/oc/machines/$MACHINE_ID/engineHours
+Substitua `{MACHINE_ID}` pelo ID numérico da máquina obtido em `/organizations/413958/machines-summary`.
 
-# Última leitura de horímetro
-curl http://localhost:5000/api/oc/machines/$MACHINE_ID/engineHours/latest
+| Endpoint | Link |
+|---|---|
+| Horímetro consolidado da frota | http://localhost:5000/api/oc/organizations/413958/engine-hours |
+| Frota com arquivadas | http://localhost:5000/api/oc/organizations/413958/engine-hours?include_archived=true |
+| Machines summary (para obter IDs) | http://localhost:5000/api/oc/organizations/413958/machines-summary |
 
-# Trilha GPS (breadcrumbs) — período específico
-curl "http://localhost:5000/api/oc/machines/$MACHINE_ID/breadcrumbs?startDate=2025-01-01T00:00:00Z&endDate=2025-01-31T23:59:59Z"
-
-# Histórico de localização
-curl "http://localhost:5000/api/oc/machines/$MACHINE_ID/locationHistory?startDate=2025-01-01T00:00:00Z"
-
-# Relatórios de estado do dispositivo
-curl "http://localhost:5000/api/oc/machines/$MACHINE_ID/deviceStateReports?startDate=2025-05-01T00:00:00Z"
-
-# Horas de operação diárias
-curl "http://localhost:5000/api/oc/machines/$MACHINE_ID/hoursOfOperation?startDate=2025-01-01T00:00:00Z&endDate=2025-03-31T23:59:59Z"
-
-# Medições da máquina (nível de combustível, temperatura, etc.)
-curl http://localhost:5000/api/oc/machines/$MACHINE_ID/machineMeasurements
-curl "http://localhost:5000/api/oc/machines/$MACHINE_ID/machineMeasurements?raw=true"
-
-# Consolidado de horímetro por organização (todas as máquinas com telemática)
-curl http://localhost:5000/api/oc/organizations/413958/engine-hours
-curl "http://localhost:5000/api/oc/organizations/413958/engine-hours?include_archived=true"
+Exemplos com `MACHINE_ID`:
+```
+http://localhost:5000/api/oc/machines/{MACHINE_ID}/engineHours/latest
+http://localhost:5000/api/oc/machines/{MACHINE_ID}/hoursOfOperation?startDate=2025-01-01T00:00:00Z&endDate=2025-12-31T23:59:59Z
+http://localhost:5000/api/oc/machines/{MACHINE_ID}/fuelAndUtilization?startDate=2025-01-01T00:00:00Z&endDate=2025-12-31T23:59:59Z
+http://localhost:5000/api/oc/machines/{MACHINE_ID}/breadcrumbs?startDate=2025-12-01T00:00:00Z&endDate=2025-12-31T23:59:59Z
+http://localhost:5000/api/oc/machines/{MACHINE_ID}/harvesterHead?startDate=2025-12-01T00:00:00Z&endDate=2025-12-31T23:59:59Z
 ```
 
 ---
@@ -273,33 +239,18 @@ curl "http://localhost:5000/api/oc/organizations/413958/engine-hours?include_arc
 Base: `http://localhost:5000/api/oc`
 
 ```
-GET /assetCatalog
-GET /assets/{assetId}
-GET /organizations/{orgId}/assets
-GET /assets/{assetId}/locations
+GET /assetCatalog                           ⚠️  não testado
+GET /assets/{assetId}                       ⚠️  não testado
+GET /organizations/{orgId}/assets           ⚠️  não testado
+GET /assets/{assetId}/locations             ⚠️  não testado
 ```
 
-### Exemplos
+### Links diretos (org 413958)
 
-```bash
-ORG_ID="413958"
-ASSET_ID="asset456"
-
-# Catálogo de tipos de asset
-curl http://localhost:5000/api/oc/assetCatalog
-
-# Asset específico
-curl http://localhost:5000/api/oc/assets/$ASSET_ID
-
-# Assets de uma organização
-curl http://localhost:5000/api/oc/organizations/$ORG_ID/assets
-
-# Histórico de localização do asset
-curl http://localhost:5000/api/oc/assets/$ASSET_ID/locations
-
-# Com filtro de data
-curl "http://localhost:5000/api/oc/assets/$ASSET_ID/locations?startDate=2025-01-01T00:00:00Z&endDate=2025-06-30T23:59:59Z"
-```
+| Endpoint | Link |
+|---|---|
+| Catálogo de assets | http://localhost:5000/api/oc/assetCatalog |
+| Assets da org | http://localhost:5000/api/oc/organizations/413958/assets |
 
 ---
 
@@ -315,58 +266,33 @@ GET /mapLayers/{mapLayerId}/fileResources
 GET /organizations/{orgId}/fields/{fieldId}/mapLayerSummaries
 ```
 
-### Exemplos
-
-```bash
-ORG_ID="413958"
-FIELD_ID="field789"
-LAYER_ID="layer001"
-
-# Recurso de arquivo
-curl http://localhost:5000/api/oc/fileResources/res001
-
-# Sumário de camada de mapa
-curl http://localhost:5000/api/oc/mapLayerSummaries/summary001
-
-# Camada de mapa
-curl http://localhost:5000/api/oc/mapLayers/$LAYER_ID
-
-# Arquivos de uma camada
-curl http://localhost:5000/api/oc/mapLayers/$LAYER_ID/fileResources
-
-# Sumários de camadas de um campo
-curl http://localhost:5000/api/oc/organizations/$ORG_ID/fields/$FIELD_ID/mapLayerSummaries
-```
-
 ---
 
-## Rotas — Arquivos
+## Rotas — Arquivos e TIMBERLINK
 
 Base: `http://localhost:5000/api/oc`
 
 ```
-GET /files
-GET /files/{id}
-GET /organizations/{orgId}/files
+GET /files                                          ✅ confirmado
+GET /files/{id}                                     ✅ confirmado
+GET /organizations/{orgId}/files                    ✅ confirmado
+GET /organizations/{orgId}/files/stanford           ✅ confirmado — lista arquivos StanForD/TIMBERLINK
+GET /files/{id}/download                            ✅ confirmado — download do binário (zip)
 ```
 
-### Exemplos
+> **Arquivos TIMBERLINK:** a organização 413958 possui arquivos dos tipos `.hpr`, `.prd`, `.spi`, `.mom`, `.oin`, `.pin` gerados pelas máquinas florestais, empacotados em `.zip` com tipo `TIMBERLINK`. O endpoint `/stanford` lista todos com metadados (id, nome, tamanho, máquina de origem, data).
+>
+> **Download do conteúdo interno:** os zips contêm arquivos StanForD criptografados. A senha é entregue pelo endpoint `presignedDownload` da Deere, que requer aprovação do produto **TIMBERLINK** no [developer.deere.com](https://developer.deere.com) para a aplicação. A listagem e o download do zip funcionam; a decriptação aguarda essa aprovação.
 
-```bash
-ORG_ID="413958"
+### Links diretos (org 413958)
 
-# Todos os arquivos
-curl http://localhost:5000/api/oc/files
-
-# Com filtro temporal
-curl "http://localhost:5000/api/oc/files?startDate=2025-01-01T00:00:00Z"
-
-# Arquivo específico
-curl http://localhost:5000/api/oc/files/file001
-
-# Arquivos da organização
-curl http://localhost:5000/api/oc/organizations/$ORG_ID/files
-```
+| Endpoint | Link |
+|---|---|
+| Arquivos StanForD/TIMBERLINK — dez/2025 | http://localhost:5000/api/oc/organizations/413958/files/stanford?startDate=2025-12-30&endDate=2025-12-30 |
+| Arquivos StanForD — ano completo 2025 | http://localhost:5000/api/oc/organizations/413958/files/stanford?startDate=2025-01-01&endDate=2025-12-31&itemLimit=500 |
+| Metadados de arquivo específico | http://localhost:5000/api/oc/files/57875288154 |
+| Metadados raw (estrutura Deere) | http://localhost:5000/api/oc/files/57875288154?raw=true |
+| Download do zip | http://localhost:5000/api/oc/files/57875288154/download |
 
 ---
 
@@ -401,43 +327,20 @@ GET /organizations/{orgId}/dryBlends/{id}
 GET /organizations/{orgId}/productCompanies
 ```
 
-### Exemplos
+### Links diretos (org 413958)
 
-```bash
-ORG_ID="413958"
-
-# Defensivos globais
-curl http://localhost:5000/api/agro/chemicals
-
-# Defensivos da organização
-curl http://localhost:5000/api/agro/organizations/$ORG_ID/chemicals
-
-# Defensivo específico
-curl http://localhost:5000/api/agro/chemicals/chem001
-
-# Ingredientes ativos (ISG)
-curl http://localhost:5000/api/agro/activeIngredients
-
-# Fertilizantes
-curl http://localhost:5000/api/agro/fertilizers
-curl http://localhost:5000/api/agro/organizations/$ORG_ID/fertilizers
-
-# Variedades
-curl http://localhost:5000/api/agro/varieties
-curl http://localhost:5000/api/agro/organizations/$ORG_ID/varieties
-
-# Caldas (tank mixes)
-curl http://localhost:5000/api/agro/organizations/$ORG_ID/tankMixes
-
-# Misturas secas (dry blends)
-curl http://localhost:5000/api/agro/organizations/$ORG_ID/dryBlends
-
-# Empresas de produtos
-curl http://localhost:5000/api/agro/organizations/$ORG_ID/productCompanies
-
-# Retorno bruto em qualquer endpoint
-curl "http://localhost:5000/api/agro/chemicals?raw=true"
-```
+| Endpoint | Link |
+|---|---|
+| Defensivos globais | http://localhost:5000/api/agro/chemicals |
+| Defensivos da org | http://localhost:5000/api/agro/organizations/413958/chemicals |
+| Ingredientes ativos | http://localhost:5000/api/agro/activeIngredients |
+| Fertilizantes | http://localhost:5000/api/agro/fertilizers |
+| Fertilizantes da org | http://localhost:5000/api/agro/organizations/413958/fertilizers |
+| Variedades | http://localhost:5000/api/agro/varieties |
+| Variedades da org | http://localhost:5000/api/agro/organizations/413958/varieties |
+| Tank mixes | http://localhost:5000/api/agro/organizations/413958/tankMixes |
+| Dry blends | http://localhost:5000/api/agro/organizations/413958/dryBlends |
+| Empresas de produtos | http://localhost:5000/api/agro/organizations/413958/productCompanies |
 
 ---
 
@@ -446,63 +349,45 @@ curl "http://localhost:5000/api/agro/chemicals?raw=true"
 Base: `http://localhost:5000/api/oc`
 
 ```
-GET /organizations/{orgId}/operators
-GET /organizations/{orgId}/operators/{operatorErid}
-
-GET /organizations/{orgId}/farms
-GET /organizations/{orgId}/farms/{farmId}
-GET /organizations/{orgId}/farms/{farmId}/clients
+GET /organizations/{orgId}/operators                            ✅ confirmado
+GET /organizations/{orgId}/operators/{operatorErid}             ⚠️  não testado
+GET /organizations/{orgId}/farms                                ✅ confirmado
+GET /organizations/{orgId}/farms/{farmId}                       ⚠️  não testado
+GET /organizations/{orgId}/farms/{farmId}/clients               ⚠️  não testado
+GET /organizations/{orgId}/fieldOperations                      ⚠️  não testado
+GET /organizations/{orgId}/fieldOperations/harvest              ⚠️  não testado
+GET /organizations/{orgId}/fieldOperations/{operationId}        ⚠️  não testado
 ```
 
-### Exemplos
+### Links diretos (org 413958)
 
-```bash
-ORG_ID="413958"
-FARM_ID="farm001"
-OPERATOR_ERID="op-erid-001"
-
-# Operadores da organização
-curl http://localhost:5000/api/oc/organizations/$ORG_ID/operators
-
-# Operador específico
-curl http://localhost:5000/api/oc/organizations/$ORG_ID/operators/$OPERATOR_ERID
-
-# Fazendas
-curl http://localhost:5000/api/oc/organizations/$ORG_ID/farms
-
-# Fazenda específica
-curl http://localhost:5000/api/oc/organizations/$ORG_ID/farms/$FARM_ID
-
-# Clientes de uma fazenda
-curl http://localhost:5000/api/oc/organizations/$ORG_ID/farms/$FARM_ID/clients
-```
+| Endpoint | Link |
+|---|---|
+| Operadores | http://localhost:5000/api/oc/organizations/413958/operators |
+| Fazendas | http://localhost:5000/api/oc/organizations/413958/farms |
+| Operações de campo | http://localhost:5000/api/oc/organizations/413958/fieldOperations |
+| Colheitas | http://localhost:5000/api/oc/organizations/413958/fieldOperations/harvest |
 
 ---
 
 ## Rotas — BI e Utilitários
 
 ```
-GET /api/bi/fleet?organization_id={id}   Frota formatada para BI
-GET /api/oc/proxy?path={path}            GET genérico autenticado para qualquer endpoint Deere
-GET /api/oc/discovery/ids?path={path}    Descobre IDs automaticamente em um ou mais paths
-GET /health                              Healthcheck
+GET /api/bi/fleet?organization_id={id}   ✅ confirmado — frota formatada para Power BI
+GET /api/oc/proxy?path={path}            ✅ confirmado — GET genérico autenticado para qualquer endpoint Deere
+GET /api/oc/discovery/ids?path={path}    ✅ confirmado — descobre IDs automaticamente
+GET /health                              ✅ confirmado — healthcheck
 ```
 
-### Exemplos
+### Links diretos
 
-```bash
-# Frota para BI (retorna lista plana pronta para importar)
-curl "http://localhost:5000/api/bi/fleet?organization_id=413958"
-
-# Proxy genérico — útil para explorar endpoints não mapeados
-curl "http://localhost:5000/api/oc/proxy?path=/organizations/413958/fields"
-
-# Discovery — extrai todos os IDs de múltiplos paths
-curl "http://localhost:5000/api/oc/discovery/ids?path=/organizations&path=/organizations/413958/farms"
-
-# Healthcheck
-curl http://localhost:5000/health
-```
+| Endpoint | Link |
+|---|---|
+| Frota para BI | http://localhost:5000/api/bi/fleet?organization_id=413958 |
+| Healthcheck | http://localhost:5000/health |
+| Proxy — organizations | http://localhost:5000/api/oc/proxy?path=/organizations/413958 |
+| Proxy — fields | http://localhost:5000/api/oc/proxy?path=/organizations/413958/fields |
+| Discovery de IDs | http://localhost:5000/api/oc/discovery/ids?path=/organizations/413958/farms |
 
 ---
 
@@ -549,8 +434,8 @@ let
     resposta = Json.Document(Web.Contents(url)),
     valores = resposta[values],
     tabela = Table.FromList(valores, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
-    expandida = Table.ExpandRecordColumn(tabela, "Column1", 
-        {"id", "name", "serial_number", "make_name", "model_name", 
+    expandida = Table.ExpandRecordColumn(tabela, "Column1",
+        {"id", "name", "serial_number", "make_name", "model_name",
          "type_name", "telematics_capable", "archived", "organization_id"})
 in
     expandida
@@ -558,14 +443,12 @@ in
 
 #### 4. Atualização agendada com parâmetros de data
 
-Para buscar dados com filtro temporal, parametrize as datas no Power Query:
-
 ```m
 let
     startDate = "2025-01-01T00:00:00Z",
     endDate   = "2025-12-31T23:59:59Z",
-    machineId = "abc123",
-    url = "http://localhost:5000/api/oc/machines/" & machineId 
+    machineId = "SEU_MACHINE_ID",
+    url = "http://localhost:5000/api/oc/machines/" & machineId
           & "/hoursOfOperation?startDate=" & startDate & "&endDate=" & endDate,
     resposta = Json.Document(Web.Contents(url)),
     valores = resposta[values],
@@ -579,17 +462,14 @@ in
 
 | Tabela no Power BI | URL |
 |---|---|
-| Frota | `/api/bi/fleet?organization_id={id}` |
-| Horímetro por máquina | `/api/oc/machines/{id}/engineHours/latest` |
-| Horímetro por organização | `/api/oc/organizations/{id}/engine-hours` |
-| Horas de operação | `/api/oc/machines/{id}/hoursOfOperation?startDate=...` |
-| Localização (breadcrumbs) | `/api/oc/machines/{id}/breadcrumbs?startDate=...` |
-| Assets | `/api/oc/organizations/{id}/assets` |
-| Fazendas | `/api/oc/organizations/{id}/farms` |
-| Operadores | `/api/oc/organizations/{id}/operators` |
-| Defensivos | `/api/agro/organizations/{id}/chemicals` |
-| Fertilizantes | `/api/agro/organizations/{id}/fertilizers` |
-| Variedades | `/api/agro/organizations/{id}/varieties` |
+| Frota | http://localhost:5000/api/bi/fleet?organization_id=413958 |
+| Horímetro por organização | http://localhost:5000/api/oc/organizations/413958/engine-hours |
+| Horas de operação | `http://localhost:5000/api/oc/machines/{id}/hoursOfOperation?startDate=...` |
+| Combustível e utilização | `http://localhost:5000/api/oc/machines/{id}/fuelAndUtilization?startDate=...` |
+| Localização (breadcrumbs) | `http://localhost:5000/api/oc/machines/{id}/breadcrumbs?startDate=...` |
+| Arquivos TIMBERLINK (listagem) | http://localhost:5000/api/oc/organizations/413958/files/stanford?startDate=2025-01-01&endDate=2025-12-31&itemLimit=500 |
+| Operadores | http://localhost:5000/api/oc/organizations/413958/operators |
+| Fazendas | http://localhost:5000/api/oc/organizations/413958/farms |
 
 ---
 
@@ -599,46 +479,22 @@ in
 
 #### 1. Preparar o projeto
 
-Crie o arquivo `requirements.txt` se não existir:
-
 ```bash
 pip freeze > requirements.txt
 ```
 
-Crie o `startup.txt` ou configure o comando de startup no App Service:
-
+Comando de startup:
 ```
 gunicorn --bind=0.0.0.0:8000 --timeout 120 main:app
-```
-
-Instale o gunicorn:
-
-```bash
-pip install gunicorn
-pip freeze > requirements.txt
 ```
 
 #### 2. Criar o App Service no Azure
 
 ```bash
-# Login no Azure CLI
 az login
-
-# Criar grupo de recursos
 az group create --name rg-johndeere-api --location brazilsouth
-
-# Criar App Service Plan (B1 é suficiente para início)
-az appservice plan create \
-  --name plan-johndeere-api \
-  --resource-group rg-johndeere-api \
-  --sku B1 --is-linux
-
-# Criar o Web App
-az webapp create \
-  --name johndeere-api-empresa \
-  --resource-group rg-johndeere-api \
-  --plan plan-johndeere-api \
-  --runtime "PYTHON:3.11"
+az appservice plan create --name plan-johndeere-api --resource-group rg-johndeere-api --sku B1 --is-linux
+az webapp create --name johndeere-api-empresa --resource-group rg-johndeere-api --plan plan-johndeere-api --runtime "PYTHON:3.11"
 ```
 
 #### 3. Configurar as variáveis de ambiente no Azure
@@ -652,9 +508,9 @@ az webapp config appsettings set \
     DEERE_CLIENT_ID="seu-client-id" \
     DEERE_CLIENT_SECRET="seu-client-secret" \
     DEERE_REDIRECT_URI="https://johndeere-api-empresa.azurewebsites.net/auth/callback" \
-    DEERE_SCOPES="ag1 org1 eq1 eq2 offline_access" \
+    DEERE_SCOPES="ag1 ag2 ag3 org1 eq1 eq2 files offline_access" \
     DEERE_API_BASE_URL="https://api.deere.com/platform" \
-    HTTP_TIMEOUT_SECONDS="30"
+    HTTP_TIMEOUT_SECONDS="120"
 ```
 
 > **Atenção:** Após alterar o `DEERE_REDIRECT_URI`, atualize também o redirect URI cadastrado no portal de desenvolvedores John Deere.
@@ -662,40 +518,13 @@ az webapp config appsettings set \
 #### 4. Fazer deploy
 
 ```bash
-# Via ZIP deploy
-az webapp up \
-  --name johndeere-api-empresa \
-  --resource-group rg-johndeere-api \
-  --runtime "PYTHON:3.11"
+az webapp up --name johndeere-api-empresa --resource-group rg-johndeere-api --runtime "PYTHON:3.11"
 ```
 
-Ou configure CI/CD via GitHub Actions no portal Azure.
+#### 5. Considerações de segurança para produção
 
-#### 5. Atualizar o Power BI para apontar para o Azure
-
-Após o deploy, substitua `http://localhost:5000` pela URL do Azure em todas as consultas do Power BI:
-
-```
-https://johndeere-api-empresa.azurewebsites.net
-```
-
-Exemplo:
-```
-https://johndeere-api-empresa.azurewebsites.net/api/oc/organizations/413958/equipment-summary
-```
-
-#### Considerações de segurança para produção
-
-- Adicione autenticação no App Service via **Azure Active Directory** (Entra ID) para que só usuários da empresa acessem a API
+- Adicione autenticação no App Service via **Azure Active Directory** (Entra ID)
 - Ou use **Azure API Management** como gateway com chave de API
 - Ative **HTTPS Only** no App Service (já ativo por padrão)
 - Use **Azure Key Vault** para armazenar `FLASK_SECRET_KEY` e `DEERE_CLIENT_SECRET`
-- Configure **sessões persistentes** (ex: Redis Cache do Azure) para que o token OAuth não seja perdido entre reinicializações do servidor
-
-```bash
-# Habilitar HTTPS only (verificar se já está ativo)
-az webapp update \
-  --name johndeere-api-empresa \
-  --resource-group rg-johndeere-api \
-  --https-only true
-```
+- Configure **sessões persistentes** (ex: Redis Cache do Azure) para que o token OAuth não seja perdido entre reinicializações
