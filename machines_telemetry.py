@@ -153,9 +153,15 @@ def get_machine_measurements(machine_id: str):
         params["interval"] = interval
 
     if raw:
+        embed = request.args.get("embed")
+        if embed:
+            params["embed"] = embed
+
         response, error = _authorized_get(url, params=params or None)
+
         if error:
             return jsonify(error[0]), error[1]
+
         return jsonify(response.json()), 200
 
     params["embed"] = "measurementDefinition"
