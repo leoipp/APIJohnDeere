@@ -7,5 +7,5 @@
   "DEERE_OAUTH_ISSUER": "https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7",
   "DEERE_SCOPES": "ag1 ag2 ag3 org1 eq1 eq2 files offline_access",
   "DEERE_API_BASE_URL": "https://api.deere.com/platform",
-  "HTTP_TIMEOUT_SECONDS": "60"
+  "HTTP_TIMEOUT_SECONDS": "120"
 }

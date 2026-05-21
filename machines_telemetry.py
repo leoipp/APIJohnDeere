@@ -9,6 +9,27 @@ _FUEL_NAME = "Fuel Consumed"
 _UTILIZATION_NAME = "Machine Utilization"
 _NO_PAGING_HEADER = {"x-deere-no-paging": "true"}
 
+_HARVESTER_HEAD_NAMES = {
+    "Grapple Count",
+    "Volume",
+    "Weight",
+    "Average Cycle Time",
+    "Times",
+    "Fuel Consumption",
+    "Machine Utilization by Machine State",
+}
+
+_GRAPPLE_SEQ_LABELS: dict[int, str] = {0: "grapple_close", 1: "grapple_open"}
+_TIMES_SEQ_LABELS: dict[int, str] = {
+    0: "working",
+    1: "idle",
+    2: "moving",
+    3: "maintenance",
+    4: "other",
+}
+_FUEL_SEQ_LABELS: dict[int, str] = {0: "working", 1: "idle", 2: "moving"}
+_UTILIZATION_SEQ_LABELS: dict[int, str] = {0: "working", 1: "idle", 2: "transport"}
+
 
 def _def_id_from_item(item: dict) -> str | None:
     embedded = item.get("machineMeasurementDefinition")
@@ -216,6 +237,89 @@ def get_fuel_and_utilization(machine_id: str):
                 }
                 if name == _UTILIZATION_NAME and value is not None:
                     row["value_hours"] = round(value / 3600, 4)
+                rows.append(row)
+
+    return jsonify({
+        "machine_id": machine_id,
+        "total": len(rows),
+        "values": rows,
+    }), 200
+
+
+# ============================================================
+# HARVESTER HEAD DATA
+# ============================================================
+
+@machines_telemetry_bp.get("/machines/<string:machine_id>/harvesterHead")
+def get_harvester_head(machine_id: str):
+    if not machine_id.strip():
+        return jsonify({"error": "invalid_machine_id", "message": "machine_id nao pode ser vazio."}), 400
+
+    params: dict = {"embed": "measurementDefinition"}
+    date_p = _date_params(request.args.get("startDate"), request.args.get("endDate"))
+    if date_p:
+        params.update(date_p)
+    interval = request.args.get("interval")
+    if interval:
+        params["interval"] = interval
+
+    url = _platform_url(f"/machines/{machine_id}/machineMeasurements")
+    values, error = _fetch_all_pages(url, params=params, extra_headers=_NO_PAGING_HEADER)
+    if error:
+        return jsonify(error[0]), error[1]
+
+    rows = []
+    for item in values:
+        name = _def_name_from_item(item)
+        if name not in _HARVESTER_HEAD_NAMES:
+            continue
+
+        def_id = _def_id_from_item(item)
+        series = item.get("series") if isinstance(item.get("series"), dict) else {}
+        level = series.get("level")
+        intervals = series.get("intervals") if isinstance(series.get("intervals"), list) else []
+
+        if name == "Grapple Count":
+            seq_labels = _GRAPPLE_SEQ_LABELS
+        elif name == "Times":
+            seq_labels = _TIMES_SEQ_LABELS
+        elif name == "Fuel Consumption":
+            seq_labels = _FUEL_SEQ_LABELS
+        elif name == "Machine Utilization by Machine State":
+            seq_labels = _UTILIZATION_SEQ_LABELS
+        else:
+            seq_labels = {}
+
+        for interval_item in intervals:
+            if not isinstance(interval_item, dict):
+                continue
+            interval_start = interval_item.get("intervalStartDate")
+            interval_end = interval_item.get("intervalEndDate")
+            buckets_wrap = interval_item.get("buckets") if isinstance(interval_item.get("buckets"), dict) else {}
+            buckets = buckets_wrap.get("buckets") if isinstance(buckets_wrap.get("buckets"), list) else []
+            for bucket in buckets:
+                if not isinstance(bucket, dict):
+                    continue
+                seq = bucket.get("sequenceNumber")
+                value = bucket.get("value")
+                row: dict = {
+                    "measurement_def_id": def_id,
+                    "measurement_name": name,
+                    "network_type": item.get("networkType"),
+                    "level": level,
+                    "interval_start": interval_start,
+                    "interval_end": interval_end,
+                    "actual_start": bucket.get("actualStartDate"),
+                    "actual_end": bucket.get("actualEndDate"),
+                    "count": bucket.get("count"),
+                    "sequence_number": seq,
+                    "category": seq_labels.get(seq) if seq_labels else None,
+                    "value": value,
+                }
+                if name in ("Times", "Machine Utilization by Machine State") and value is not None:
+                    row["value_hours"] = round(value / 3600, 4)
+                elif name == "Average Cycle Time" and value is not None:
+                    row["value_minutes"] = round(value / 60, 4)
                 rows.append(row)
 
     return jsonify({
